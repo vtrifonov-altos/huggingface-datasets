@@ -30,23 +30,32 @@ def inject_arrow_table_documentation(arrow_table_method):
     return wrapper
 
 
-def _in_memory_arrow_table_from_file(filename: str) -> pa.Table:
+def _in_memory_arrow_table_from_file(filename: str, use_ipc: bool = False) -> pa.Table:
     in_memory_stream = pa.input_stream(filename)
-    opened_stream = pa.ipc.open_stream(in_memory_stream)
+    if use_ipc:
+        opened_stream = pa.ipc.open_file(in_memory_stream)
+    else:
+        opened_stream = pa.ipc.open_stream(in_memory_stream)
     pa_table = opened_stream.read_all()
     return pa_table
 
 
-def _in_memory_arrow_table_from_buffer(buffer: pa.Buffer) -> pa.Table:
+def _in_memory_arrow_table_from_buffer(buffer: pa.Buffer, use_ipc: bool = False) -> pa.Table:
     stream = pa.BufferReader(buffer)
-    opened_stream = pa.ipc.open_stream(stream)
+    if use_ipc:
+        opened_stream = pa.ipc.open_file(stream)
+    else:
+        opened_stream = pa.ipc.open_stream(stream)
     table = opened_stream.read_all()
     return table
 
 
-def _memory_mapped_record_batch_reader_from_file(filename: str) -> pa.RecordBatchStreamReader:
+def _memory_mapped_record_batch_reader_from_file(filename: str, use_ipc: bool = False) -> pa.RecordBatchStreamReader:
     memory_mapped_stream = pa.memory_map(filename)
-    return pa.ipc.open_stream(memory_mapped_stream)
+    if use_ipc:
+        return pa.ipc.open_file(memory_mapped_stream)
+    else:
+        return pa.ipc.open_stream(memory_mapped_stream)
 
 
 def read_schema_from_file(filename: str) -> pa.Schema:
@@ -59,8 +68,8 @@ def read_schema_from_file(filename: str) -> pa.Schema:
     return schema
 
 
-def _memory_mapped_arrow_table_from_file(filename: str) -> pa.Table:
-    opened_stream = _memory_mapped_record_batch_reader_from_file(filename)
+def _memory_mapped_arrow_table_from_file(filename: str, use_ipc: bool = False) -> pa.Table:
+    opened_stream = _memory_mapped_record_batch_reader_from_file(filename, use_ipc=use_ipc)
     pa_table = opened_stream.read_all()
     return pa_table
 
@@ -651,13 +660,13 @@ class InMemoryTable(TableBlock):
     """
 
     @classmethod
-    def from_file(cls, filename: str):
-        table = _in_memory_arrow_table_from_file(filename)
+    def from_file(cls, filename: str, use_ipc: bool = False):
+        table = _in_memory_arrow_table_from_file(filename, use_ipc=use_ipc)
         return cls(table)
 
     @classmethod
-    def from_buffer(cls, buffer: pa.Buffer):
-        table = _in_memory_arrow_table_from_buffer(buffer)
+    def from_buffer(cls, buffer: pa.Buffer, use_ipc: bool = False):
+        table = _in_memory_arrow_table_from_buffer(buffer, use_ipc=use_ipc)
         return cls(table)
 
     @classmethod
@@ -1007,26 +1016,28 @@ class MemoryMappedTable(TableBlock):
     stay low.
     """
 
-    def __init__(self, table: pa.Table, path: str, replays: Optional[list[Replay]] = None):
+    def __init__(self, table: pa.Table, path: str, replays: Optional[list[Replay]] = None, use_ipc: bool = False):
         super().__init__(table)
         self.path = os.path.abspath(path)
         self.replays: list[Replay] = replays if replays is not None else []
+        self.use_ipc = use_ipc
 
     @classmethod
-    def from_file(cls, filename: str, replays=None):
-        table = _memory_mapped_arrow_table_from_file(filename)
+    def from_file(cls, filename: str, replays=None, use_ipc: bool = False):
+        table = _memory_mapped_arrow_table_from_file(filename, use_ipc=use_ipc)
         table = cls._apply_replays(table, replays)
-        return cls(table, filename, replays)
+        return cls(table, filename, replays, use_ipc=use_ipc)
 
     def __getstate__(self):
-        return {"path": self.path, "replays": self.replays}
+        return {"path": self.path, "replays": self.replays, "use_ipcs": self.use_ipc}
 
     def __setstate__(self, state):
         path = state["path"]
         replays = state["replays"]
-        table = _memory_mapped_arrow_table_from_file(path)
+        use_ipc = state["use_ipc"]
+        table = _memory_mapped_arrow_table_from_file(path, use_ipc=use_ipc)
         table = self._apply_replays(table, replays)
-        MemoryMappedTable.__init__(self, table, path=path, replays=replays)
+        MemoryMappedTable.__init__(self, table, path=path, replays=replays, use_ipc=use_ipc   )
 
     @staticmethod
     def _apply_replays(table: pa.Table, replays: Optional[list[Replay]] = None) -> pa.Table:

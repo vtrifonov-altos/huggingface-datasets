@@ -422,6 +422,7 @@ class ArrowWriter:
         unit: str = "examples",
         embed_local_files: bool = False,
         storage_options: Optional[dict] = None,
+        use_ipc: bool = False,
     ):
         if path is None and stream is None:
             raise ValueError("At least one of path and stream must be provided.")
@@ -468,11 +469,16 @@ class ArrowWriter:
         self.unit = unit
         self.embed_local_files = embed_local_files
 
+        if use_ipc:
+            self.BATCH_WRITER = pa.RecordBatchFileWriter
+        else:
+            self.BATCH_WRITER = pa.RecordBatchStreamWriter
+
         self._num_examples = 0
         self._num_bytes = 0
         self.current_examples: list[tuple[dict[str, Any], str]] = []
         self.current_rows: list[pa.Table] = []
-        self.pa_writer: Optional[pa.RecordBatchStreamWriter] = None
+        self.pa_writer = None
         self.hkey_record = []
 
     def __len__(self):
@@ -524,7 +530,7 @@ class ArrowWriter:
 
     def _build_writer(self, inferred_schema: pa.Schema):
         self._schema, self._features = self._build_schema(inferred_schema)
-        self.pa_writer = pa.RecordBatchStreamWriter(self.stream, self._schema)
+        self.pa_writer = self.BATCH_WRITER(self.stream, self._schema)
 
     @property
     def schema(self):
