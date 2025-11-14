@@ -1029,7 +1029,7 @@ class MemoryMappedTable(TableBlock):
         return cls(table, filename, replays, use_ipc=use_ipc)
 
     def __getstate__(self):
-        return {"path": self.path, "replays": self.replays, "use_ipcs": self.use_ipc}
+        return {"path": self.path, "replays": self.replays, "use_ipc": self.use_ipc}
 
     def __setstate__(self, state):
         path = state["path"]
@@ -1037,7 +1037,7 @@ class MemoryMappedTable(TableBlock):
         use_ipc = state["use_ipc"]
         table = _memory_mapped_arrow_table_from_file(path, use_ipc=use_ipc)
         table = self._apply_replays(table, replays)
-        MemoryMappedTable.__init__(self, table, path=path, replays=replays, use_ipc=use_ipc   )
+        MemoryMappedTable.__init__(self, table, path=path, replays=replays, use_ipc=use_ipc)
 
     @staticmethod
     def _apply_replays(table: pa.Table, replays: Optional[list[Replay]] = None) -> pa.Table:
@@ -1073,7 +1073,7 @@ class MemoryMappedTable(TableBlock):
         replay = ("slice", (offset, length), {})
         replays = self._append_replay(replay)
         # Use fast slicing here
-        return MemoryMappedTable(self.fast_slice(offset=offset, length=length), self.path, replays)
+        return MemoryMappedTable(self.fast_slice(offset=offset, length=length), self.path, replays, use_ipc=self.use_ipc)
 
     def filter(self, *args, **kwargs):
         """
@@ -1081,7 +1081,7 @@ class MemoryMappedTable(TableBlock):
         """
         replay = ("filter", copy.deepcopy(args), copy.deepcopy(kwargs))
         replays = self._append_replay(replay)
-        return MemoryMappedTable(self.table.filter(*args, **kwargs), self.path, replays)
+        return MemoryMappedTable(self.table.filter(*args, **kwargs), self.path, replays, use_ipc=self.use_ipc)
 
     def flatten(self, *args, **kwargs):
         """
@@ -1097,7 +1097,7 @@ class MemoryMappedTable(TableBlock):
         """
         replay = ("flatten", copy.deepcopy(args), copy.deepcopy(kwargs))
         replays = self._append_replay(replay)
-        return MemoryMappedTable(table_flatten(self.table, *args, **kwargs), self.path, replays)
+        return MemoryMappedTable(table_flatten(self.table, *args, **kwargs), self.path, replays, use_ipc=self.use_ipc)
 
     def combine_chunks(self, *args, **kwargs):
         """
@@ -1115,7 +1115,7 @@ class MemoryMappedTable(TableBlock):
         """
         replay = ("combine_chunks", copy.deepcopy(args), copy.deepcopy(kwargs))
         replays = self._append_replay(replay)
-        return MemoryMappedTable(self.table.combine_chunks(*args, **kwargs), self.path, replays)
+        return MemoryMappedTable(self.table.combine_chunks(*args, **kwargs), self.path, replays, use_ipc=self.use_ipc)
 
     def cast(self, *args, **kwargs):
         """
@@ -1132,7 +1132,7 @@ class MemoryMappedTable(TableBlock):
         """
         replay = ("cast", copy.deepcopy(args), copy.deepcopy(kwargs))
         replays = self._append_replay(replay)
-        return MemoryMappedTable(table_cast(self.table, *args, **kwargs), self.path, replays)
+        return MemoryMappedTable(table_cast(self.table, *args, **kwargs), self.path, replays, use_ipc=self.use_ipc)
 
     def replace_schema_metadata(self, *args, **kwargs):
         """
@@ -1148,7 +1148,7 @@ class MemoryMappedTable(TableBlock):
         """
         replay = ("replace_schema_metadata", copy.deepcopy(args), copy.deepcopy(kwargs))
         replays = self._append_replay(replay)
-        return MemoryMappedTable(self.table.replace_schema_metadata(*args, **kwargs), self.path, replays)
+        return MemoryMappedTable(self.table.replace_schema_metadata(*args, **kwargs), self.path, replays, use_ipc=self.use_ipc)
 
     def add_column(self, *args, **kwargs):
         """
@@ -1171,7 +1171,7 @@ class MemoryMappedTable(TableBlock):
         """
         replay = ("add_column", copy.deepcopy(args), copy.deepcopy(kwargs))
         replays = self._append_replay(replay)
-        return MemoryMappedTable(self.table.add_column(*args, **kwargs), self.path, replays)
+        return MemoryMappedTable(self.table.add_column(*args, **kwargs), self.path, replays, use_ipc=self.use_ipc)
 
     def append_column(self, *args, **kwargs):
         """
@@ -1190,7 +1190,7 @@ class MemoryMappedTable(TableBlock):
         """
         replay = ("append_column", copy.deepcopy(args), copy.deepcopy(kwargs))
         replays = self._append_replay(replay)
-        return MemoryMappedTable(self.table.append_column(*args, **kwargs), self.path, replays)
+        return MemoryMappedTable(self.table.append_column(*args, **kwargs), self.path, replays, use_ipc=self.use_ipc)
 
     def remove_column(self, *args, **kwargs):
         """
@@ -1206,7 +1206,7 @@ class MemoryMappedTable(TableBlock):
         """
         replay = ("remove_column", copy.deepcopy(args), copy.deepcopy(kwargs))
         replays = self._append_replay(replay)
-        return MemoryMappedTable(self.table.remove_column(*args, **kwargs), self.path, replays)
+        return MemoryMappedTable(self.table.remove_column(*args, **kwargs), self.path, replays, use_ipc=self.use_ipc)
 
     def set_column(self, *args, **kwargs):
         """
@@ -1227,7 +1227,7 @@ class MemoryMappedTable(TableBlock):
         """
         replay = ("set_column", copy.deepcopy(args), copy.deepcopy(kwargs))
         replays = self._append_replay(replay)
-        return MemoryMappedTable(self.table.set_column(*args, **kwargs), self.path, replays)
+        return MemoryMappedTable(self.table.set_column(*args, **kwargs), self.path, replays, use_ipc=self.use_ipc)
 
     def rename_columns(self, *args, **kwargs):
         """
@@ -1235,7 +1235,7 @@ class MemoryMappedTable(TableBlock):
         """
         replay = ("rename_columns", copy.deepcopy(args), copy.deepcopy(kwargs))
         replays = self._append_replay(replay)
-        return MemoryMappedTable(self.table.rename_columns(*args, **kwargs), self.path, replays)
+        return MemoryMappedTable(self.table.rename_columns(*args, **kwargs), self.path, replays, use_ipc=self.use_ipc)
 
     def drop(self, *args, **kwargs):
         """
@@ -1254,7 +1254,7 @@ class MemoryMappedTable(TableBlock):
         """
         replay = ("drop", copy.deepcopy(args), copy.deepcopy(kwargs))
         replays = self._append_replay(replay)
-        return MemoryMappedTable(self.table.drop(*args, **kwargs), self.path, replays)
+        return MemoryMappedTable(self.table.drop(*args, **kwargs), self.path, replays, use_ipc=self.use_ipc)
 
     def select(self, *args, **kwargs):
         """
@@ -1271,7 +1271,7 @@ class MemoryMappedTable(TableBlock):
         """
         replay = ("select", copy.deepcopy(args), copy.deepcopy(kwargs))
         replays = self._append_replay(replay)
-        return MemoryMappedTable(self.table.select(*args, **kwargs), self.path, replays)
+        return MemoryMappedTable(self.table.select(*args, **kwargs), self.path, replays, use_ipc=self.use_ipc)
 
 
 # A ConcatenationTable is the concatenation of several tables.
