@@ -1444,6 +1444,8 @@ class Dataset(DatasetInfoMixin, IndexableMixin, TensorflowDatasetMixin):
         num_shards: Optional[int] = None,
         num_proc: Optional[int] = None,
         storage_options: Optional[dict] = None,
+        use_ipc: bool = False,
+        writer_batch_size: Optional[int] = None
     ):
         """
         Saves a dataset to a dataset directory, or in a filesystem using any implementation of `fsspec.spec.AbstractFileSystem`.
@@ -1555,6 +1557,7 @@ class Dataset(DatasetInfoMixin, IndexableMixin, TensorflowDatasetMixin):
                 ) from None
         # Get json serializable dataset info
         dataset_info = asdict(self._info)
+        dataset_info["use_ipc"] = use_ipc
 
         shards_done = 0
         pbar = hf_tqdm(
@@ -1568,6 +1571,8 @@ class Dataset(DatasetInfoMixin, IndexableMixin, TensorflowDatasetMixin):
                 "shard": self.shard(num_shards=num_shards, index=shard_idx, contiguous=True),
                 "fpath": posixpath.join(dataset_path, f"data-{shard_idx:05d}-of-{num_shards:05d}.arrow"),
                 "storage_options": storage_options,
+                "use_ipc": use_ipc,
+                "writer_batch_size": writer_batch_size
             }
             for shard_idx in range(num_shards)
         )
@@ -1609,15 +1614,19 @@ class Dataset(DatasetInfoMixin, IndexableMixin, TensorflowDatasetMixin):
             json.dump(sorted_keys_dataset_info, dataset_info_file, indent=2)
 
     @staticmethod
-    def _save_to_disk_single(job_id: int, shard: "Dataset", fpath: str, storage_options: Optional[dict]):
-        batch_size = config.DEFAULT_MAX_BATCH_SIZE
-
+    def _save_to_disk_single(job_id: int, shard: "Dataset", fpath: str, storage_options: Optional[dict], use_ipc: bool = False, writer_batch_size: Optional[int] = None):
+        if writer_batch_size is None:
+            batch_size = config.DEFAULT_MAX_BATCH_SIZE
+        else:
+            batch_size = writer_batch_size
         num_examples_progress_update = 0
         writer = ArrowWriter(
             features=shard.features,
             path=fpath,
             storage_options=storage_options,
+            writer_batch_size=writer_batch_size,
             embed_local_files=True,
+            use_ipc=use_ipc,
         )
         try:
             _time = time.time()
@@ -1657,7 +1666,7 @@ class Dataset(DatasetInfoMixin, IndexableMixin, TensorflowDatasetMixin):
         dataset_path: str,
         fs="deprecated",
         keep_in_memory: Optional[bool] = None,
-        storage_options: Optional[dict] = None,
+        storage_options: Optional[dict] = None
     ) -> "Dataset":
         """
         Loads a dataset that was previously saved using [`save_to_disk`] from a dataset directory, or from a
@@ -1753,7 +1762,9 @@ class Dataset(DatasetInfoMixin, IndexableMixin, TensorflowDatasetMixin):
         with open(dataset_state_json_path, encoding="utf-8") as state_file:
             state = json.load(state_file)
         with open(dataset_info_path, encoding="utf-8") as dataset_info_file:
-            dataset_info = DatasetInfo.from_dict(json.load(dataset_info_file))
+            dataset_info = json.load(dataset_info_file)
+            use_ipc = dataset_info.pop("use_ipc", False)
+            dataset_info = DatasetInfo.from_dict(dataset_info)
 
         dataset_size = estimate_dataset_size(
             Path(dest_dataset_path, data_file["filename"]) for data_file in state["_data_files"]
@@ -1763,8 +1774,9 @@ class Dataset(DatasetInfoMixin, IndexableMixin, TensorflowDatasetMixin):
 
         arrow_table = concat_tables(
             thread_map(
-                table_cls.from_file,
+                lambda p, u: table_cls.from_file(p, use_ipc=u),
                 [posixpath.join(dest_dataset_path, data_file["filename"]) for data_file in state["_data_files"]],
+                [use_ipc for _ in state["_data_files"]],
                 tqdm_class=hf_tqdm,
                 desc="Loading dataset from disk",
                 # set `disable=None` rather than `disable=False` by default to disable progress bar when no TTY attached

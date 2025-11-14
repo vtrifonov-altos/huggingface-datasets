@@ -291,8 +291,6 @@ class OptimizedTypedSequence(TypedSequence):
 class ArrowWriter:
     """Shuffles and writes Examples to Arrow files."""
 
-    _WRITER_CLASS = pa.RecordBatchStreamWriter
-
     def __init__(
         self,
         schema: Optional[pa.Schema] = None,
@@ -309,6 +307,7 @@ class ArrowWriter:
         unit: str = "examples",
         embed_local_files: bool = False,
         storage_options: Optional[dict] = None,
+        use_ipc: bool = False,
     ):
         if path is None and stream is None:
             raise ValueError("At least one of path and stream must be provided.")
@@ -351,11 +350,16 @@ class ArrowWriter:
         self.unit = unit
         self.embed_local_files = embed_local_files
 
+        if use_ipc:
+            self._WRITER_CLASS = pa.RecordBatchFileWriter
+        else:
+            self._WRITER_CLASS = pa.RecordBatchStreamWriter
+
         self._num_examples = 0
         self._num_bytes = 0
         self.current_examples: List[Tuple[Dict[str, Any], str]] = []
         self.current_rows: List[pa.Table] = []
-        self.pa_writer: Optional[pa.RecordBatchStreamWriter] = None
+        self.pa_writer = None
         self.hkey_record = []
 
     def __len__(self):
