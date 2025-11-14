@@ -1589,7 +1589,8 @@ class Dataset(DatasetInfoMixin, IndexableMixin, TensorflowDatasetMixin):
                 ) from None
         # Get json serializable dataset info
         dataset_info = asdict(self._info)
-        dataset_info["use_ipc"] = use_ipc
+        if use_ipc:
+            dataset_info["use_ipc"] = use_ipc
 
         shards_done = 0
         pbar = hf_tqdm(

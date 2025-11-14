@@ -1029,12 +1029,15 @@ class MemoryMappedTable(TableBlock):
         return cls(table, filename, replays, use_ipc=use_ipc)
 
     def __getstate__(self):
-        return {"path": self.path, "replays": self.replays, "use_ipc": self.use_ipc}
+        state = {"path": self.path, "replays": self.replays}
+        if self.use_ipc:
+            state["use_ipc"] = self.use_ipc
+        return state
 
     def __setstate__(self, state):
         path = state["path"]
         replays = state["replays"]
-        use_ipc = state["use_ipc"]
+        use_ipc = state.get("use_ipc", False)
         table = _memory_mapped_arrow_table_from_file(path, use_ipc=use_ipc)
         table = self._apply_replays(table, replays)
         MemoryMappedTable.__init__(self, table, path=path, replays=replays, use_ipc=use_ipc)
